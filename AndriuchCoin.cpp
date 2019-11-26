@@ -12,7 +12,8 @@
 #include <list>
 #include <algorithm>
 #include <functional>
-#include <stdlib.h> 
+#include <stdlib.h>
+#include <cassert>
 using std::cin;
 using std::cout;
 using std::endl;
@@ -123,18 +124,20 @@ public:
 		cout << TimeStamp << endl;
 		cout << "Versija" << endl;
 		cout << Version << endl;
-		cout << "Merkletreehashas (neimplementuota)" << endl;
+		cout << "Merkletreehashas" << endl;
 		cout << treeHash << endl;
 		cout << "Nonce su kuriuo pavyko suhashint" << endl;
 		cout << nonce << endl;
 		cout << "Kiek nuliu reikejo" << endl;
 		cout << difficulty << endl;
-		cout << "transakcijos" << endl;
+		/*cout << "transakcijos" << endl;
 		for (int i = 0 ; i < trans.size(); i++)
 		{
 			trans[i].printtrans();
 		}
 		cout << endl;
+		*/
+		
 	}
 
 };
@@ -201,7 +204,6 @@ void GenerateUsers(size_t amount, vector <user>& accounts)
 		user temp(name, roll(), Hash(input.c_str(), input.length()));
 		//temp.printuser();
 		accounts.push_back(temp);
-		_sleep(20);
 	}
 }
 
@@ -224,7 +226,6 @@ void GenerateTransactions(size_t amount, vector <transaction>& transac, vector<u
 		user SendAccount = accounts[roll()];
 		string sender = SendAccount.getpublicKey();
 		string sendHash = Hash(sender.c_str(), sender.length());
-		_sleep(20);
 		user ReceivAccount = accounts[roll()];
 		string receiv = ReceivAccount.getpublicKey();
 		string receivHash = Hash(receiv.c_str(), receiv.length());
@@ -237,11 +238,56 @@ void GenerateTransactions(size_t amount, vector <transaction>& transac, vector<u
 			SendAccount.updateBalance(SendAccount.getmoney() - pinigai);
 			ReceivAccount.updateBalance(ReceivAccount.getmoney() + pinigai);
 		}
-		else cout << "Nepakankamas balansas transakcijai " << pinigai << " > " << SendAccount.getmoney() << endl;
+		//else cout << "Nepakankamas balansas transakcijai " << pinigai << " > " << SendAccount.getmoney() << endl;
 		//tempTrans.printtrans();
-		_sleep(60);
 	}
 
+}
+string merkle_tree_root(vector <transaction>& transac)
+{
+
+	string merkleroot;
+	vector<string> merkle;
+	for (int i=0;i<transac.size();i++)
+	{
+		merkle.push_back(transac[i].getID());
+	}
+	  if (merkle.empty())
+        return Hash(merkleroot.c_str(),merkleroot.length());
+    else if (merkle.size() == 1)
+        return merkle[0];
+
+    // While there is more than 1 hash in the list, keep looping...
+    while (merkle.size() > 1)
+    {
+        // If number of hashes is odd, duplicate last hash in the list.
+        if (merkle.size() % 2 != 0)
+            merkle.push_back(merkle.back());
+        // List size is now even.
+        assert(merkle.size() % 2 == 0);
+
+        // New hash list.
+        vector<string> new_merkle;
+        // Loop through hashes 2 at a time.
+        for (auto it = merkle.begin(); it != merkle.end(); it += 2)
+        {
+            // Join both current hashes together (concatenate).
+            string concat_data= (*it)+(*(it+1));
+            string hash=Hash(concat_data.c_str(),concat_data.length());
+            new_merkle.push_back(hash);
+        }
+        // This is the new list.
+        merkle = new_merkle;
+
+        // DEBUG output -------------------------------------
+      //  std::cout << "Current merkle hash list:" << std::endl;
+      //  for (const auto& hash: merkle)
+      //      std::cout << "  " << hash << std::endl;
+      //  std::cout << std::endl;
+        // --------------------------------------------------
+    }
+    // Finally we end up with a single item.
+    return merkle[0];
 }
 void GenerateBlock(int blockNr, vector<user>& accounts, vector<transaction>& transac, list<block>& blockchain)
 {
@@ -263,7 +309,8 @@ void GenerateBlock(int blockNr, vector<user>& accounts, vector<transaction>& tra
 		vector<transaction> tempor;
 		transaction temp("Andrius", "Andrius", 1, "PirmasBlokas");
 		tempor.push_back(temp);
-		block GenesisBlock("0", dt, "0", nonceas, 1, tempor, 1);
+		string merkleroot=merkle_tree_root(tempor);
+		block GenesisBlock("0", dt, merkleroot, nonceas, 1, tempor, 1);
 		string hashable = GenesisBlock.ReturnHashable();
 		string blockHash = Hash(hashable.c_str(), hashable.length());
 		int nuliai = 0;
@@ -300,11 +347,16 @@ void GenerateBlock(int blockNr, vector<user>& accounts, vector<transaction>& tra
 		int nonceas = 0;
 		int k = 0;
 
-		int a1 = rand() % (transac.size() - 101);
-		int b1 = rand() % (transac.size() - 101);
-		int c1 = rand() % (transac.size() - 101);
-		int d1 = rand() % (transac.size() - 101);
-		int e1 = rand() % (transac.size() - 101);
+		seed = std::chrono::system_clock::now().time_since_epoch().count();
+		std::default_random_engine generator(seed);
+		std::uniform_int_distribution<int> distribution(0,transac.size()-100);
+		auto roll = std::bind ( distribution, generator );
+
+		int a1 = roll();
+		int b1 = roll();
+		int c1 = roll();
+		int d1 = roll();
+		int e1 = roll();
 
 		vector <transaction> transa1;
 		vector <transaction> transb1;
@@ -358,7 +410,9 @@ void GenerateBlock(int blockNr, vector<user>& accounts, vector<transaction>& tra
 			}
 
 			block temp = blockchain.back();
-			block BlockAttempt(temp.getHash(), dt, "0", nonceas, diff, transakcijos[foo[p]], TRANSNUMBER);
+
+			string merkleroot=merkle_tree_root(transakcijos[foo[p]]);
+			block BlockAttempt(temp.getHash(), dt, merkleroot, nonceas, diff, transakcijos[foo[p]], TRANSNUMBER);
 			string hashable = BlockAttempt.ReturnHashable();
 			string blockHash = Hash(hashable.c_str(), hashable.length());
 			int nuliai = 0;
